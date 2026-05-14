@@ -1,0 +1,18 @@
+{
+  "plan_id": "phase-0-example-do-not-use-blindly",
+  "approval_required": true,
+  "approved_by_human": false,
+  "approved_scope": "metadata-only or internal-links-only or phase-0-cleanup",
+  "summary": "Example format only. Replace with a real approved plan after reviewing evidence.",
+  "changes": [
+    {
+      "operation": "replace_text",
+      "file": "src/example.tsx",
+      "affected_url": "https://academicteacher.co.uk/example/",
+      "evidence": "Example evidence from report. Do not use this sample as a real patch.",
+      "current_text": "Old exact text here",
+      "replacement_text": "New exact text here",
+      "rollback_note": "Restore the old exact text."
+    }
+  ]
+}
