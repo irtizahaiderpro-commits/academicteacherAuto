@@ -1,0 +1,221 @@
+name: Academic Teacher SEO Control
+
+on:
+  workflow_dispatch:
+    inputs:
+      command:
+        description: "SEO command to run"
+        required: true
+        default: "/start-seo-review"
+        type: choice
+        options:
+          - /start-seo-review
+          - /start-phase-0-cleanup
+          - /start-approved-implementation
+          - /prepare-deploy-pack
+          - /refresh-dashboard
+          - /install-seo-control
+      approval_token:
+        description: "Required only for approved implementation PR creation"
+        required: false
+        default: ""
+      ai_provider:
+        description: "AI provider for review"
+        required: false
+        default: "none"
+        type: choice
+        options:
+          - none
+          - anthropic
+          - openai
+
+  schedule:
+    - cron: "0 6 * * *"
+    - cron: "0 7 * * 1"
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+
+jobs:
+  seo-control:
+    name: SEO control runner
+    runs-on: ubuntu-latest
+    env:
+      SITE_URL: https://academicteacher.co.uk
+      COMMAND: ${{ github.event.inputs.command || '/start-seo-review' }}
+      APPROVAL_TOKEN: ${{ github.event.inputs.approval_token || '' }}
+      AI_PROVIDER: ${{ github.event.inputs.ai_provider || 'none' }}
+      ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+      OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+      ANTHROPIC_MODEL: ${{ vars.ANTHROPIC_MODEL || 'claude-3-5-sonnet-latest' }}
+      OPENAI_MODEL: ${{ vars.OPENAI_MODEL || 'gpt-4o-mini' }}
+      APPLY_APPROVED_PATCH: "false"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node 20
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Setup Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install dependencies
+        shell: bash
+        run: |
+          set -e
+          python -m pip install --upgrade pip setuptools wheel
+          if [ -f requirements.txt ]; then
+            pip install -r requirements.txt
+          else
+            echo "requirements.txt missing. Continuing with built-in Python libraries only."
+          fi
+          python -m playwright install chromium || true
+          if [ -f package-lock.json ]; then
+            npm ci
+          elif [ -f package.json ]; then
+            npm install
+          else
+            echo "No package.json found. Node install skipped."
+          fi
+          mkdir -p reports proposals logs seo-control approved_patches
+
+      - name: Parse command safely
+        shell: bash
+        run: |
+          set -e
+          python scripts/seo_command_parser.py "$COMMAND"
+
+      - name: Run SEO control self-test
+        shell: bash
+        run: |
+          set -e
+          python scripts/seo_control_self_test.py --check-files
+
+      - name: Run SEO audit pipeline
+        shell: bash
+        run: |
+          set -e
+          if [ -f scripts/run_daily_pipeline.py ]; then
+            python scripts/run_daily_pipeline.py
+          else
+            echo "Missing scripts/run_daily_pipeline.py. Copy your existing SEO audit pipeline into scripts/ first." | tee logs/missing-pipeline.log
+            exit 1
+          fi
+
+      - name: Create run summary
+        shell: bash
+        run: |
+          python - <<'PY'
+          import json, glob, os, datetime
+          data = {
+            "site": "https://academicteacher.co.uk",
+            "command": os.environ.get("COMMAND", ""),
+            "created_at_utc": datetime.datetime.utcnow().isoformat() + "Z",
+            "reports": sorted(glob.glob("reports/*"))[-25:],
+            "proposals": sorted(glob.glob("proposals/*"))[-10:],
+            "approval_required": True,
+            "auto_deploy_enabled": False,
+            "status": "AUDIT_COMPLETE_IMPLEMENTATION_LOCKED"
+          }
+          open("seo-control/latest-run-summary.json", "w", encoding="utf-8").write(json.dumps(data, indent=2))
+          print(json.dumps(data, indent=2))
+          PY
+
+      - name: Run AI Specialist and Director review
+        if: env.AI_PROVIDER != 'none'
+        shell: bash
+        run: |
+          set -e
+          python scripts/seo_ai_review_runner.py
+
+      - name: Validate approved patch plan only for implementation command
+        if: env.COMMAND == '/start-approved-implementation'
+        shell: bash
+        run: |
+          set -e
+          python scripts/seo_patch_plan_validator.py
+
+      - name: Apply approved patch only after validator passes
+        if: env.COMMAND == '/start-approved-implementation'
+        shell: bash
+        env:
+          APPLY_APPROVED_PATCH: "true"
+        run: |
+          set -e
+          python scripts/seo_patch_plan_validator.py
+
+      - name: Build after audit or approved patch
+        shell: bash
+        run: |
+          set -e
+          if [ -f package.json ]; then
+            npm run build --if-present
+            npm run check:production --if-present
+          else
+            echo "No package.json found. Build skipped."
+          fi
+
+      - name: Re-run audit after approved patch
+        if: env.COMMAND == '/start-approved-implementation'
+        shell: bash
+        run: |
+          set -e
+          python scripts/run_daily_pipeline.py
+
+      - name: Create deploy readiness pack
+        shell: bash
+        run: |
+          python scripts/seo_deploy_readiness.py || true
+
+      - name: Create dashboard snapshot
+        shell: bash
+        run: |
+          set -e
+          python scripts/seo_dashboard_reporter.py
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: academic-teacher-seo-control-artifacts
+          path: |
+            reports
+            proposals
+            logs
+            seo-control
+          if-no-files-found: warn
+
+      - name: Create approval-gated PR
+        if: env.COMMAND == '/start-approved-implementation'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: seo/approved-implementation-${{ github.run_number }}
+          title: "SEO approved implementation - run ${{ github.run_number }}"
+          commit-message: "SEO: apply approved patch plan"
+          body: |
+            This PR was created by the Academic Teacher SEO Control workflow.
+
+            Safety rules:
+            - Created only from approved_patches/approved_patch_plan.json
+            - Approval token was required
+            - Blocked files are not allowed
+            - Build and audit were run before PR creation
+            - Deploy readiness pack was created
+            - Dashboard snapshot was created
+            - No deployment was performed
+
+            Review these files before merging:
+            - seo-control/patch-validation-result.json
+            - seo-control/deploy-readiness.json
+            - seo-control/dashboard-snapshot.json
+          labels: |
+            seo
+            approval-required
