@@ -1,0 +1,71 @@
+{
+  "notes": [
+    "This is a starter source map. Update paths to match the real Academic Teacher source repo before approved implementation.",
+    "Do not allow implementation where affected_file remains unknown.",
+    "Use this map to guide AI proposal review and manual patch-plan creation."
+  ],
+  "routes": {
+    "/": [
+      "src/pages/home.tsx",
+      "src/App.tsx"
+    ],
+    "/services/": [
+      "src/pages/services.tsx",
+      "src/data/services.ts"
+    ],
+    "/guides/": [
+      "src/pages/guides.tsx",
+      "src/data/guides.ts"
+    ],
+    "/subjects/": [
+      "src/pages/subjects.tsx",
+      "src/data/subjects.ts"
+    ],
+    "/samples/": [
+      "src/pages/samples.tsx"
+    ],
+    "/contact/": [
+      "src/pages/contact.tsx"
+    ],
+    "/subjects/project-management/": [
+      "src/data/subjects.ts",
+      "src/pages/subject-detail.tsx"
+    ],
+    "/subjects/business-management/": [
+      "src/data/subjects.ts",
+      "src/pages/subject-detail.tsx"
+    ],
+    "/subjects/nursing/": [
+      "src/data/subjects.ts",
+      "src/pages/subject-detail.tsx"
+    ],
+    "/subjects/health-social-care/": [
+      "src/data/subjects.ts",
+      "src/pages/subject-detail.tsx"
+    ],
+    "/subjects/computer-science/": [
+      "src/data/subjects.ts",
+      "src/pages/subject-detail.tsx"
+    ],
+    "/subjects/artificial-intelligence/": [
+      "src/data/subjects.ts",
+      "src/pages/subject-detail.tsx"
+    ],
+    "/subjects/mba/": [
+      "src/data/subjects.ts",
+      "src/pages/subject-detail.tsx"
+    ],
+    "/services/assignment-writing/": [
+      "src/data/services.ts",
+      "src/pages/service-detail.tsx"
+    ],
+    "/services/dissertation-help/": [
+      "src/data/services.ts",
+      "src/pages/service-detail.tsx"
+    ],
+    "/services/proofreading-editing/": [
+      "src/data/services.ts",
+      "src/pages/service-detail.tsx"
+    ]
+  }
+}
