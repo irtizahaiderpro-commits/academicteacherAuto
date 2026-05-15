@@ -30,7 +30,9 @@ on:
           - openai
 
   schedule:
+    # Daily read-only audit/report run at 06:00 UTC
     - cron: "0 6 * * *"
+    # Weekly read-only review at 07:00 UTC every Monday
     - cron: "0 7 * * 1"
 
 permissions:
@@ -72,12 +74,22 @@ jobs:
         run: |
           set -e
           python -m pip install --upgrade pip setuptools wheel
+
           if [ -f requirements.txt ]; then
             pip install -r requirements.txt
           else
-            echo "requirements.txt missing. Continuing with built-in Python libraries only."
+            echo "requirements.txt missing. Continuing with explicit SEO runner dependencies."
           fi
-          python -m playwright install chromium || true
+
+          # Required for rendered crawling.
+          pip install playwright
+
+          # Install Chromium and Linux dependencies where possible.
+          python -m playwright install --with-deps chromium || python -m playwright install chromium
+
+          # Basic network check. This should return headers from the live site.
+          curl -I --max-time 30 https://academicteacher.co.uk/ || true
+
           if [ -f package-lock.json ]; then
             npm ci
           elif [ -f package.json ]; then
@@ -85,6 +97,7 @@ jobs:
           else
             echo "No package.json found. Node install skipped."
           fi
+
           mkdir -p reports proposals logs seo-control approved_patches
 
       - name: Parse command safely
@@ -106,7 +119,7 @@ jobs:
           if [ -f scripts/run_daily_pipeline.py ]; then
             python scripts/run_daily_pipeline.py
           else
-            echo "Missing scripts/run_daily_pipeline.py. Copy your existing SEO audit pipeline into scripts/ first." | tee logs/missing-pipeline.log
+            echo "Missing scripts/run_daily_pipeline.py. Copy your SEO audit pipeline into scripts/ first." | tee logs/missing-pipeline.log
             exit 1
           fi
 
